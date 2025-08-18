@@ -50,7 +50,7 @@ impl Beem {
     }
 
     pub fn draw(&self, d: &mut RaylibDrawHandle) {
-        d.draw_circle_v(self.position, Self::RADIUS, Color::RED);
+        d.draw_circle_v(self.position, Self::RADIUS, Color::WHITE);
     }
 }
 
@@ -87,15 +87,17 @@ fn main() {
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
-        d.clear_background(Color::WHITE);
+        d.clear_background(Color::DARKGRAY);
         gargantula.draw(&mut d);
         beem.draw(&mut d);
         beem.update(&mut d);
-        let mass_text = format!("Mass: {:.1e} Solar Masses", gargantula.mass);
+        let mass_text = format!("mass: {:.1e} solar masses", gargantula.mass);
         let radius_km = gargantula.event_horizon_radius() / SCALE_FACTOR;
-        let radius_text = format!("Event Horizon: {:.1} km", radius_km);
+        let radius_text = format!("event horizon: {:.1} km", radius_km);
+        let speedup_text = format!("speedup: x{:.1e}", SPEEDUP_FACTOR);
 
         d.draw_text(&mass_text, 10, 10, 20, Color::BLACK);
         d.draw_text(&radius_text, 10, 35, 20, Color::BLACK);
+        d.draw_text(&speedup_text, 10, 60, 20, Color::BLACK);
     }
 }
