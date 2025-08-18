@@ -9,7 +9,7 @@ pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
 pub const SOLAR_MASS: f64 = 1.988416e30f64; //kg
 pub const SCALE_FACTOR: f64 = 3.4e-11f64; //scale down
-pub const MOVE_FACTOR: f64 = 1.33e-6f64; // artificial move factor for now since at current scale light moves too slow
+pub const SPEEDUP_FACTOR: f64 = 39235.0; // acceleration of frame so light movement is visible -> if 1, real time
 
 struct BlackHole {
     position: Vector2,
@@ -31,7 +31,7 @@ impl Beem {
     }
 
     fn update(&mut self, d: &mut RaylibDrawHandle) {
-        let distance: f32 = (d.get_frame_time() as f64 * C * MOVE_FACTOR) as f32;
+        let distance: f32 = (d.get_frame_time() as f64 * C * SCALE_FACTOR * SPEEDUP_FACTOR) as f32;
         self.position.x += distance * self.angle.cos();
         self.position.y += distance * self.angle.sin();
 
@@ -62,7 +62,7 @@ impl BlackHole {
         }
     }
     // r_s
-    fn event_horizon_radius(&self) -> f64 {
+    pub fn event_horizon_radius(&self) -> f64 {
         let mass_kg: f64 = self.mass * SOLAR_MASS;
         let r_s: f64 = SCALE_FACTOR * (2.0 * G * mass_kg) / (C * C);
         r_s
@@ -91,5 +91,11 @@ fn main() {
         gargantula.draw(&mut d);
         beem.draw(&mut d);
         beem.update(&mut d);
+        let mass_text = format!("Mass: {:.1e} Solar Masses", gargantula.mass);
+        let radius_km = gargantula.event_horizon_radius() / SCALE_FACTOR;
+        let radius_text = format!("Event Horizon: {:.1} km", radius_km);
+
+        d.draw_text(&mass_text, 10, 10, 20, Color::BLACK);
+        d.draw_text(&radius_text, 10, 35, 20, Color::BLACK);
     }
 }
