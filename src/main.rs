@@ -8,7 +8,7 @@ pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
 pub const SOLAR_MASS: f64 = 1.988416e30f64; //kg
 pub const SCALE_FACTOR: f64 = 3.4e-11f64; //scale down
-pub const SPEEDUP_FACTOR: f64 = 39235.0; // acceleration of frame so light movement is visible -> if 1, real time
+pub const SPEEDUP_FACTOR: f64 = 39235.0 / 2.0; // acceleration of frame so light movement is visible -> if 1, real time
 
 struct Beem {
     position: Vector2,
@@ -105,18 +105,24 @@ fn main() {
     let sh: f32 = SCREEN_HEIGHT as f32;
     let sw: f32 = SCREEN_WIDTH as f32;
     let gargantula = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
-    let mut beem: Option<Beem> = Some(Beem::new(0.0, sh / 2.0, 0.0));
+
+    let mut beems: Vec<Beem> = Vec::new();
+    let num_beams = 10;
+    let beam_spacing = sh / (num_beams + 1) as f32;
+
+    for i in 1..=num_beams {
+        let y_pos = i as f32 * beam_spacing;
+        beems.push(Beem::new(0.0, y_pos, 0.0));
+    }
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
         d.clear_background(Color::LIGHTGRAY);
-        if let Some(ref mut beam) = beem {
-            beam.update(&mut d);
-            beam.draw(&mut d);
-            if beam.within_event_horizon(&gargantula) {
-                beem = None;
-            }
-        }
+        beems.retain_mut(|beem| {
+            beem.draw(&mut d);
+            beem.update(&mut d);
+            !beem.within_event_horizon(&gargantula)
+        });
         gargantula.draw(&mut d);
 
         let mass_text = format!("mass: {:.1e} solar masses", gargantula.mass);
