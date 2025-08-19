@@ -104,32 +104,43 @@ fn main() {
     rl.set_target_fps(60);
     let sh: f32 = SCREEN_HEIGHT as f32;
     let sw: f32 = SCREEN_WIDTH as f32;
+
+    // black hole definition, simmulating Interstrellar's black hole Gargantula
     let gargantula = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
 
+    // beems creation logic with uniform spacing for visualization
     let mut beems: Vec<Beem> = Vec::new();
     let num_beams = 10;
     let beam_spacing = sh / (num_beams + 1) as f32;
-
     for i in 1..=num_beams {
         let y_pos = i as f32 * beam_spacing;
         beems.push(Beem::new(0.0, y_pos, 0.0));
     }
 
+    // main loop that runs simmulation until window closes
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
+
+        // draw background
         d.clear_background(Color::LIGHTGRAY);
+
+        //draw beems and delete them if they fall within event horizon
         beems.retain_mut(|beem| {
             beem.draw(&mut d);
             beem.update(&mut d);
             !beem.within_event_horizon(&gargantula)
         });
+
+        //draw event horizon
         gargantula.draw(&mut d);
 
+        // vars for description
         let mass_text = format!("mass: {:.1e} solar masses", gargantula.mass);
         let radius_km = gargantula.event_horizon_radius() / SCALE_FACTOR;
         let radius_text = format!("event horizon: {:.1} km", radius_km);
         let speedup_text = format!("speedup: x{:.1e}", SPEEDUP_FACTOR);
 
+        // description with relevant info
         d.draw_text(&mass_text, 10, 10, 20, Color::BLACK);
         d.draw_text(&radius_text, 10, 35, 20, Color::BLACK);
         d.draw_text(&speedup_text, 10, 60, 20, Color::BLACK);
