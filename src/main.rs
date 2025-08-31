@@ -18,7 +18,7 @@ struct Beem {
 }
 
 impl Beem {
-    const RADIUS: f32 = 5.0;
+    const RADIUS: f32 = 2.0;
     const MAX_TRAIL_LENGTH: usize = 100;
 
     pub fn new(x: f32, y: f32, angle: f32) -> Self {
@@ -35,15 +35,15 @@ impl Beem {
             return;
         }
 
-        // Add current position to trail before moving
+        // add current position to trail before moving
         self.trail.push(self.position);
 
-        // Limit trail length
+        // limit trail length
         if self.trail.len() > Self::MAX_TRAIL_LENGTH {
             self.trail.remove(0);
         }
 
-        // Check if within event horizon before moving
+        // check if within event horizon before moving
         if self.within_event_horizon(black_hole) {
             self.is_alive = false;
             return;
@@ -72,7 +72,7 @@ impl Beem {
             wrapped = true;
         }
 
-        // Clear trail when wrapping to avoid long lines across screen
+        // clear trail when wrapping to avoid long lines across screen
         if wrapped {
             self.trail.clear();
         }
@@ -91,16 +91,21 @@ impl Beem {
         for i in 1..self.trail.len() {
             let alpha = (i as f32 / self.trail.len() as f32 * 255.0) as u8;
             let trail_color = Color::new(255, 255, 255, alpha);
-            d.draw_line_ex(self.trail[i - 1], self.trail[i], 2.0, trail_color);
+            d.draw_line_ex(
+                self.trail[i - 1],
+                self.trail[i],
+                Self::RADIUS * 2.0,
+                trail_color,
+            );
         }
 
-        // Draw current position only if beam is still alive
+        // draw current position only if beam is still alive
         if self.is_alive {
             d.draw_circle_v(self.position, Self::RADIUS, Color::WHITE);
         }
     }
 
-    // Check if beam should be removed (no trail left and dead)
+    // check if beam should be removed (no trail left and dead)
     pub fn should_remove(&self) -> bool {
         !self.is_alive && self.trail.is_empty()
     }
