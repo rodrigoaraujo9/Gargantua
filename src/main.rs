@@ -15,6 +15,8 @@ struct Beem {
     angle: f32, // 0 - 2PI
     trail: Vec<Vector2>,
     is_alive: bool,
+    original_position: Vector2,
+    original_angle: f32,
 }
 
 impl Beem {
@@ -27,11 +29,17 @@ impl Beem {
             angle,
             trail: Vec::new(),
             is_alive: true,
+            original_position: Vector2::new(x, y),
+            original_angle: angle,
         }
     }
 
     fn update(&mut self, d: &mut RaylibDrawHandle, black_hole: &BlackHole) {
         if !self.is_alive {
+            // If beam is dead, gradually remove trail points to make it fade away
+            if !self.trail.is_empty() {
+                self.trail.remove(0);
+            }
             return;
         }
 
@@ -50,31 +58,17 @@ impl Beem {
         }
 
         let distance: f32 = (d.get_frame_time() as f64 * C * SCALE_FACTOR * SPEEDUP_FACTOR) as f32;
-        let old_position = self.position;
         self.position.x += distance * self.angle.cos();
         self.position.y += distance * self.angle.sin();
 
-        let mut wrapped = false;
-        if self.position.x > SCREEN_WIDTH as f32 {
-            self.position.x = 0.0;
-            wrapped = true;
-        }
-        if self.position.x < 0.0 {
-            self.position.x = SCREEN_WIDTH as f32;
-            wrapped = true;
-        }
-        if self.position.y > SCREEN_HEIGHT as f32 {
-            self.position.y = 0.0;
-            wrapped = true;
-        }
-        if self.position.y < 0.0 {
-            self.position.y = SCREEN_HEIGHT as f32;
-            wrapped = true;
-        }
-
-        // clear trail when wrapping to avoid long lines across screen
-        if wrapped {
-            self.trail.clear();
+        // Instead of wrapping, kill the beam when it goes off screen
+        if self.position.x > SCREEN_WIDTH as f32
+            || self.position.x < 0.0
+            || self.position.y > SCREEN_HEIGHT as f32
+            || self.position.y < 0.0
+        {
+            self.is_alive = false;
+            return;
         }
     }
 
@@ -87,7 +81,7 @@ impl Beem {
     }
 
     pub fn draw(&self, d: &mut RaylibDrawHandle) {
-        // Draw trail
+        // draw trail
         for i in 1..self.trail.len() {
             let alpha = (i as f32 / self.trail.len() as f32 * 255.0) as u8;
             let trail_color = Color::new(255, 255, 255, alpha);
@@ -108,6 +102,14 @@ impl Beem {
     // check if beam should be removed (no trail left and dead)
     pub fn should_remove(&self) -> bool {
         !self.is_alive && self.trail.is_empty()
+    }
+
+    // respawn the beam at original position
+    pub fn respawn(&mut self) {
+        self.position = self.original_position;
+        self.angle = self.original_angle;
+        self.trail.clear();
+        self.is_alive = true;
     }
 }
 
@@ -179,12 +181,16 @@ fn main() {
         // draw background
         d.clear_background(Color::LIGHTGRAY);
 
-        //update and draw beems, remove only when trail is completely gone
-        beems.retain_mut(|beem| {
+        //update and draw beems, respawn when trail is completely gone
+        for beem in &mut beems {
             beem.update(&mut d, &gargantula);
             beem.draw(&mut d);
-            !beem.should_remove()
-        });
+
+            // respawn beam if it should be removed
+            if beem.should_remove() {
+                beem.respawn();
+            }
+        }
 
         //draw event horizon
         gargantula.draw(&mut d);
