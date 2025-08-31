@@ -3,12 +3,21 @@ use raylib::prelude::*;
 
 pub const SCREEN_WIDTH: i32 = 800;
 pub const SCREEN_HEIGHT: i32 = 600;
+pub const NUM_BEEMS: i32 = 50;
 
 pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
 pub const SOLAR_MASS: f64 = 1.988416e30f64; //kg
 pub const SCALE_FACTOR: f64 = 3.4e-11f64; //scale down
-pub const SPEEDUP_FACTOR: f64 = 0.000001; // acceleration of frame so light movement is visible
+pub const SPEEDUP_FACTOR: f64 = 0.0000015; // acceleration of frame so light movement is visible
+
+#[derive(Copy, Clone)]
+struct BeemState {
+    r: f64,
+    phi: f64,
+    dr: f64,
+    dphi: f64,
+}
 
 struct Beem {
     position: Vector2,
@@ -66,19 +75,74 @@ impl Beem {
         self.initialized = true;
     }
 
+    fn get_derivatives(&self, state: BeemState, black_hole: &BlackHole) -> BeemState {
+        let r_s = black_hole.event_horizon_radius() / SCALE_FACTOR;
+
+        let d2r = state.r * state.dphi * state.dphi * (1.0 - r_s / state.r)
+            - (C * C * r_s) / (2.0 * state.r * state.r);
+        let d2phi = -2.0 * state.dr * state.dphi / state.r;
+
+        BeemState {
+            r: state.dr,
+            phi: state.dphi,
+            dr: d2r,
+            dphi: d2phi,
+        }
+    }
+
+    fn rk4_step(&self, state: BeemState, dt: f64, black_hole: &BlackHole) -> BeemState {
+        let k1 = self.get_derivatives(state, black_hole);
+        let k2_state = BeemState {
+            r: state.r + k1.r * dt / 2.0,
+            phi: state.phi + k1.phi * dt / 2.0,
+            dr: state.dr + k1.dr * dt / 2.0,
+            dphi: state.dphi + k1.dphi * dt / 2.0,
+        };
+        let k2 = self.get_derivatives(k2_state, black_hole);
+
+        let k3_state = BeemState {
+            r: state.r + k2.r * dt / 2.0,
+            phi: state.phi + k2.phi * dt / 2.0,
+            dr: state.dr + k2.dr * dt / 2.0,
+            dphi: state.dphi + k2.dphi * dt / 2.0,
+        };
+        let k3 = self.get_derivatives(k3_state, black_hole);
+
+        let k4_state = BeemState {
+            r: state.r + k3.r * dt,
+            phi: state.phi + k3.phi * dt,
+            dr: state.dr + k3.dr * dt,
+            dphi: state.dphi + k3.dphi * dt,
+        };
+        let k4 = self.get_derivatives(k4_state, black_hole);
+
+        BeemState {
+            r: state.r + (k1.r + 2.0 * k2.r + 2.0 * k3.r + k4.r) * dt / 6.0,
+            phi: state.phi + (k1.phi + 2.0 * k2.phi + 2.0 * k3.phi + k4.phi) * dt / 6.0,
+            dr: state.dr + (k1.dr + 2.0 * k2.dr + 2.0 * k3.dr + k4.dr) * dt / 6.0,
+            dphi: state.dphi + (k1.dphi + 2.0 * k2.dphi + 2.0 * k3.dphi + k4.dphi) * dt / 6.0,
+        }
+    }
+
     fn step(&mut self, black_hole: &BlackHole, r_s: f64, dt: f64) {
         if self.r < r_s * 1.01 {
             self.is_alive = false;
             return;
         }
 
-        let d2r = self.r * self.dphi * self.dphi - (C * C * r_s) / (2.0 * self.r * self.r);
-        let d2phi = -2.0 * self.dr * self.dphi / self.r;
+        let current_state = BeemState {
+            r: self.r,
+            phi: self.phi,
+            dr: self.dr,
+            dphi: self.dphi,
+        };
 
-        self.dr += d2r * dt;
-        self.dphi += d2phi * dt;
-        self.r += self.dr * dt;
-        self.phi += self.dphi * dt;
+        let new_state = self.rk4_step(current_state, dt, black_hole);
+
+        self.r = new_state.r;
+        self.phi = new_state.phi;
+        self.dr = new_state.dr;
+        self.dphi = new_state.dphi;
 
         let x = (self.r * self.phi.cos()) * SCALE_FACTOR + black_hole.position.x as f64;
         let y = (self.r * self.phi.sin()) * SCALE_FACTOR + black_hole.position.y as f64;
@@ -132,7 +196,6 @@ impl Beem {
         self.trail.clear();
         self.is_alive = true;
 
-        // Reset geodesic variables
         self.r = 0.0;
         self.phi = 0.0;
         self.dr = 0.0;
@@ -141,10 +204,9 @@ impl Beem {
     }
 
     pub fn draw(&self, d: &mut RaylibDrawHandle) {
-        // draw trail
         for i in 1..self.trail.len() {
             let alpha = (i as f32 / self.trail.len() as f32 * 255.0) as u8;
-            let trail_color = Color::new(255, 255, 255, alpha);
+            let trail_color = Color::new(169, 169, 169, alpha);
             d.draw_line_ex(
                 self.trail[i - 1],
                 self.trail[i],
@@ -153,9 +215,8 @@ impl Beem {
             );
         }
 
-        // draw current position only if beam is still alive
         if self.is_alive {
-            d.draw_circle_v(self.position, Self::RADIUS, Color::WHITE);
+            d.draw_circle_v(self.position, Self::RADIUS, Color::DARKGRAY);
         }
     }
 }
@@ -168,8 +229,8 @@ impl Drop for Beem {
 
 struct BlackHole {
     position: Vector2,
-    mass: f64,   // in solar masses
-    radius: f64, // in pixels
+    mass: f64,
+    radius: f64,
 }
 
 impl BlackHole {
@@ -181,14 +242,12 @@ impl BlackHole {
         }
     }
 
-    // public r_s
     pub fn event_horizon_radius(&self) -> f64 {
         let mass_kg: f64 = self.mass * SOLAR_MASS;
         let r_s: f64 = SCALE_FACTOR * (2.0 * G * mass_kg) / (C * C);
         r_s
     }
 
-    // r_s used for init
     fn event_horizon_radius_init(mass: f64) -> f64 {
         let mass_kg: f64 = mass * SOLAR_MASS;
         let r_s: f64 = SCALE_FACTOR * (2.0 * G * mass_kg) / (C * C);
@@ -210,48 +269,41 @@ fn main() {
     let sh: f32 = SCREEN_HEIGHT as f32;
     let sw: f32 = SCREEN_WIDTH as f32;
 
-    // black hole definition, simulating Interstellar's black hole Gargantua
     let gargantua = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
 
-    // beams creation logic with uniform spacing for visualization
     let mut beems: Vec<Beem> = Vec::new();
-    let num_beams = 10;
+    let num_beams = NUM_BEEMS;
     let beam_spacing = sh / (num_beams + 1) as f32;
     for i in 1..=num_beams {
         let y_pos = i as f32 * beam_spacing;
         beems.push(Beem::new(0.0, y_pos, 0.0));
     }
 
-    // main loop that runs simulation until window closes
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
-        // draw background
-        d.clear_background(Color::LIGHTGRAY);
+        d.clear_background(Color::new(20, 20, 20, 255));
 
-        // update and draw beams, respawn when trail is completely gone
         for beem in &mut beems {
             beem.update(&mut d, &gargantua);
             beem.draw(&mut d);
 
-            // respawn beam if it should be removed
             if beem.should_remove() {
                 beem.respawn();
             }
         }
 
-        // draw event horizon
         gargantua.draw(&mut d);
 
-        // vars for description
         let mass_text = format!("mass: {:.1e} solar masses", gargantua.mass);
+        let light_beems_text = format!("number of light beems: {:}", NUM_BEEMS);
         let radius_km = gargantua.event_horizon_radius() / SCALE_FACTOR;
         let radius_text = format!("event horizon: {:.1} km", radius_km);
         let speedup_text = format!("speedup: x{:.1e}", SPEEDUP_FACTOR);
 
-        // description with relevant info
-        d.draw_text(&mass_text, 10, 10, 20, Color::BLACK);
-        d.draw_text(&radius_text, 10, 35, 20, Color::BLACK);
-        d.draw_text(&speedup_text, 10, 60, 20, Color::BLACK);
+        d.draw_text(&mass_text, 10, 10, 20, Color::WHITE);
+        d.draw_text(&radius_text, 10, 35, 20, Color::WHITE);
+        d.draw_text(&light_beems_text, 10, 60, 20, Color::WHITE);
+        d.draw_text(&speedup_text, 10, 85, 20, Color::WHITE);
     }
 }
