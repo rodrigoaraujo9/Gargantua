@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 pub const SCREEN_WIDTH: i32 = 800;
 pub const SCREEN_HEIGHT: i32 = 600;
-pub const NUM_BEEMS: i32 = 100;
+pub const NUM_BEEMS: i32 = 200;
 
 pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
@@ -272,17 +272,34 @@ fn main() {
 
     let gargantua = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
 
-    let mut beems_left: Vec<Beem> = Vec::new();
-    let num_beams = NUM_BEEMS / 2;
+    let mut beems: Vec<Beem> = Vec::new();
+    let num_beams = NUM_BEEMS / 4;
     let beam_spacing = sh / (num_beams + 1) as f32;
+
+    // left
     for i in 1..=num_beams {
         let y_pos = i as f32 * beam_spacing;
-        beems_left.push(Beem::new(0.0, y_pos, 0.0));
+        beems.push(Beem::new(0.0, y_pos, 0.0));
     }
+
+    // right
     for i in 1..=num_beams {
         let y_pos = i as f32 * beam_spacing;
         let lim: f32 = (SCREEN_WIDTH - 1) as f32;
-        beems_left.push(Beem::new(lim, y_pos, PI as f32));
+        beems.push(Beem::new(lim, y_pos, PI as f32));
+    }
+
+    // top
+    for i in 1..=num_beams {
+        let x_pos = i as f32 * beam_spacing;
+        beems.push(Beem::new(x_pos, 0.0, (PI as f32) / 2.0));
+    }
+
+    // bottom
+    for i in 1..=num_beams {
+        let x_pos = i as f32 * beam_spacing;
+        let lim2: f32 = (SCREEN_HEIGHT - 1) as f32;
+        beems.push(Beem::new(x_pos, lim2, 3.0 * (PI as f32) / 2.0));
     }
 
     while !rl.window_should_close() {
@@ -290,7 +307,7 @@ fn main() {
 
         d.clear_background(Color::new(20, 20, 20, 255));
 
-        for beem in &mut beems_left {
+        for beem in &mut beems {
             beem.update(&mut d, &gargantua);
             beem.draw(&mut d);
 
