@@ -151,7 +151,10 @@ impl Beem {
     }
 
     // handles state for beem
-    fn update(&mut self, d: &mut RaylibDrawHandle, black_hole: &BlackHole, scale_factor: f64) {
+    // The `d: &mut RaylibDrawHandle` parameter is not needed here
+    // since we're not drawing within the update function.
+    // It's good practice to separate update logic from drawing logic.
+    fn update(&mut self, black_hole: &BlackHole, scale_factor: f64) {
         // fades the trail if dead
         if !self.is_alive {
             if !self.trail.is_empty() {
@@ -276,7 +279,7 @@ fn main() {
 
     let gargantua = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
     let r_s_physical_initial = gargantua.event_horizon_radius_physical();
-    let mut scale_factor = (SCREEN_WIDTH as f64 * 0.1) / r_s_physical_initial;
+    let mut scale_factor = (SCREEN_WIDTH as f64 * 0.2) / r_s_physical_initial;
     const ZOOM_SPEED: f64 = 0.05;
 
     let mut beems: Vec<Beem> = Vec::new();
@@ -307,6 +310,8 @@ fn main() {
         beems.push(Beem::new(x_pos, lim2, 3.0 * (PI as f32) / 2.0));
     }
 
+    let mut show_title = true;
+
     while !rl.window_should_close() {
         if rl.is_key_down(KeyboardKey::KEY_Z) {
             scale_factor *= 1.0 + ZOOM_SPEED;
@@ -315,12 +320,16 @@ fn main() {
             scale_factor *= 1.0 - ZOOM_SPEED;
         }
 
+        if rl.is_key_pressed(KeyboardKey::KEY_I) {
+            show_title = !show_title;
+        }
+
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::new(20, 20, 20, 255));
 
         for beem in &mut beems {
-            beem.update(&mut d, &gargantua, scale_factor);
+            beem.update(&gargantua, scale_factor);
             beem.draw(&mut d);
 
             if beem.should_remove() {
@@ -330,24 +339,31 @@ fn main() {
 
         gargantua.draw(&mut d, scale_factor);
 
-        let mass_text = format!("mass: {:.1e} solar masses", gargantua.mass);
-        let light_beems_text = format!("number of light beems: {:}", NUM_BEEMS);
-        let radius_km = gargantua.event_horizon_radius_physical() / 1000.0;
-        let radius_text = format!("event horizon: {:.1} km", radius_km);
-        let zoom_text = format!("zoom: {:.2e}", scale_factor);
-        let step_text = format!("angular step (dphi): {:.3}", PHI_STEP_FACTOR);
+        if show_title {
+            let text_width = d.measure_text("GARGANTUA", 120);
+            let text_x = (SCREEN_WIDTH - text_width) / 2;
+            let text_y = (SCREEN_HEIGHT - 120) / 2;
+            d.draw_text("GARGANTUA", text_x, text_y, 120, Color::WHITE);
+        } else {
+            let mass_text = format!("mass: {:.1e} solar masses", gargantua.mass);
+            let light_beems_text = format!("number of light beems: {:}", NUM_BEEMS);
+            let radius_km = gargantua.event_horizon_radius_physical() / 1000.0;
+            let radius_text = format!("event horizon: {:.1} km", radius_km);
+            let zoom_text = format!("zoom: {:.2e}", scale_factor);
+            let step_text = format!("angular step (dphi): {:.3}", PHI_STEP_FACTOR);
 
-        d.draw_text(&mass_text, 10, 10, 20, Color::WHITE);
-        d.draw_text(&radius_text, 10, 35, 20, Color::WHITE);
-        d.draw_text(&light_beems_text, 10, 60, 20, Color::WHITE);
-        d.draw_text(&zoom_text, 10, 85, 20, Color::WHITE);
-        d.draw_text(&step_text, 10, 110, 20, Color::WHITE);
-        d.draw_text(
-            "Using Schwarzschild metric (r'dphi^2 = ...) ",
-            10,
-            135,
-            18,
-            Color::GRAY,
-        );
+            d.draw_text(&mass_text, 10, 10, 20, Color::WHITE);
+            d.draw_text(&radius_text, 10, 35, 20, Color::WHITE);
+            d.draw_text(&light_beems_text, 10, 60, 20, Color::WHITE);
+            d.draw_text(&zoom_text, 10, 85, 20, Color::WHITE);
+            d.draw_text(&step_text, 10, 110, 20, Color::WHITE);
+            d.draw_text(
+                "Using Schwarzschild metric (r'dphi^2 = ...) ",
+                10,
+                135,
+                18,
+                Color::GRAY,
+            );
+        }
     }
 }
