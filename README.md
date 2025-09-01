@@ -1,7 +1,5 @@
 # Gargantua — Black Hole Light Simulation
 
-![Screenshot](screenshots/gif1.gif)
-
 This project is an interactive simulation of light beams bending around a Schwarzschild black hole, written in **[Rust](https://github.com/rust-lang/rust)** with [raylib](https://www.raylib.com/).
 
 ## Inspiration
@@ -63,7 +61,7 @@ making the simulation smoother and easier to control interactively.
 - **Respawn logic**: Beams that cross the event horizon or leave the viewport are reset to keep the simulation full.
 - **Overlay modes**: Press **I** to toggle between cinematic title mode (_GARGANTUA_) and physics information mode.
 
-### Examples
+### Preview
 
 ![Screenshot](screenshots/screenshot_title.png)
 ![Screenshot](screenshots/screenshot_info.png)
