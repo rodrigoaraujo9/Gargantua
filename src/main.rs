@@ -9,8 +9,6 @@ pub const NUM_BEEMS: i32 = 1000;
 pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
 pub const SOLAR_MASS: f64 = 1.988416e30f64; //kg
-pub const SCALE_FACTOR: f64 = 2.0 * 3.4e-11f64; //scale down
-pub const SPEEDUP_FACTOR: f64 = 0.0000015; // acceleration of frame so light movement is visible
 
 // angular step size (dphi) for simulation speed
 pub const PHI_STEP_FACTOR: f64 = 0.01;
@@ -23,8 +21,9 @@ struct BeemState {
 }
 
 struct Beem {
-    position: Vector2, // position in screen coordinates
-    angle: f32,        // 0 - 2PI
+    // position in screen coordinates, updated from physical state and zoom factor
+    position: Vector2,
+    angle: f32, // 0 - 2PI
     trail: Vec<Vector2>,
     is_alive: bool,
 
@@ -60,8 +59,10 @@ impl Beem {
         }
     }
 
-    fn initialize_geodesics(&mut self, black_hole: &BlackHole) {
-        // once per beem
+    fn initialize_geodesics(&mut self, black_hole: &BlackHole, scale_factor: f64) {
+        // This function sets up initial physical state variables
+        // based on the screen coordinates, using the current scale factor.
+
         if self.initialized {
             return;
         }
@@ -69,7 +70,7 @@ impl Beem {
         // convert screen coordinates to physical polar coordinates relative to the black hole
         let dx = self.position.x - black_hole.position.x;
         let dy = self.position.y - black_hole.position.y;
-        let r = ((dx * dx + dy * dy) as f64).sqrt() / SCALE_FACTOR;
+        let r = ((dx * dx + dy * dy) as f64).sqrt() / scale_factor;
         let phi = (dy as f64).atan2(dx as f64);
 
         self.u = 1.0 / r;
@@ -86,7 +87,7 @@ impl Beem {
     }
 
     fn get_derivatives(&self, state: BeemState, black_hole: &BlackHole) -> (f64, f64) {
-        // calulate the derivatives from the geodesic equation
+        // This is a purely physical calculation, independent of the screen scale.
         let r_s_physical = black_hole.event_horizon_radius_physical();
         let d2u_dphi2 = -state.u + (1.5 * r_s_physical) * state.u * state.u;
         (state.du_dphi, d2u_dphi2)
@@ -147,16 +148,10 @@ impl Beem {
             self.is_alive = false;
             return;
         }
-
-        // convert back to screen coordinates for drawing -> cartesian
-        let x = (r * self.phi.cos()) * SCALE_FACTOR + black_hole.position.x as f64;
-        let y = (r * self.phi.sin()) * SCALE_FACTOR + black_hole.position.y as f64;
-
-        self.position = Vector2::new(x as f32, y as f32);
     }
 
     // handles state for beem
-    fn update(&mut self, d: &mut RaylibDrawHandle, black_hole: &BlackHole) {
+    fn update(&mut self, d: &mut RaylibDrawHandle, black_hole: &BlackHole, scale_factor: f64) {
         // fades the trail if dead
         if !self.is_alive {
             if !self.trail.is_empty() {
@@ -167,14 +162,7 @@ impl Beem {
 
         // initializes the beems physical state once and only once
         if !self.initialized {
-            self.initialize_geodesics(black_hole);
-        }
-
-        self.trail.push(self.position);
-
-        // limit trail lenght for fading effect
-        if self.trail.len() > Self::MAX_TRAIL_LENGTH {
-            self.trail.remove(0);
+            self.initialize_geodesics(black_hole, scale_factor);
         }
 
         // check if beem is beyond event horizon
@@ -187,8 +175,21 @@ impl Beem {
         }
 
         // advance the beem's state using the geodesic equations
-        let dphi = PHI_STEP_FACTOR; // Use the new constant
+        let dphi = PHI_STEP_FACTOR;
         self.step(black_hole, r_s_physical, dphi);
+
+        // convert back to screen coordinates for drawing -> cartesian
+        let r = 1.0 / self.u;
+        let x = (r * self.phi.cos()) * scale_factor + black_hole.position.x as f64;
+        let y = (r * self.phi.sin()) * scale_factor + black_hole.position.y as f64;
+        self.position = Vector2::new(x as f32, y as f32);
+
+        self.trail.push(self.position);
+
+        // limit trail lenght for fading effect
+        if self.trail.len() > Self::MAX_TRAIL_LENGTH {
+            self.trail.remove(0);
+        }
 
         // kills the ray if it goes off-screen
         if self.position.x > SCREEN_WIDTH as f32
@@ -244,7 +245,6 @@ impl Drop for Beem {
 struct BlackHole {
     position: Vector2,
     mass: f64,
-    radius: f64,
 }
 
 impl BlackHole {
@@ -252,7 +252,6 @@ impl BlackHole {
         Self {
             position: Vector2::new(x, y),
             mass,
-            radius: Self::event_horizon_radius_init(mass),
         }
     }
 
@@ -260,18 +259,8 @@ impl BlackHole {
         (2.0 * G * (self.mass * SOLAR_MASS)) / (C * C)
     }
 
-    pub fn event_horizon_radius(&self) -> f64 {
-        SCALE_FACTOR * self.event_horizon_radius_physical()
-    }
-
-    fn event_horizon_radius_init(mass: f64) -> f64 {
-        let mass_kg: f64 = mass * SOLAR_MASS;
-        let r_s: f64 = SCALE_FACTOR * (2.0 * G * mass_kg) / (C * C);
-        r_s
-    }
-
-    pub fn draw(&self, d: &mut RaylibDrawHandle) {
-        let r_s = self.event_horizon_radius();
+    pub fn draw(&self, d: &mut RaylibDrawHandle, scale_factor: f64) {
+        let r_s = scale_factor * self.event_horizon_radius_physical();
         d.draw_circle_v(self.position, r_s as f32, Color::BLACK);
     }
 }
@@ -286,6 +275,9 @@ fn main() {
     let sw: f32 = SCREEN_WIDTH as f32;
 
     let gargantua = BlackHole::new(sw / 2.0, sh / 2.0, 10e8);
+    let r_s_physical_initial = gargantua.event_horizon_radius_physical();
+    let mut scale_factor = (SCREEN_WIDTH as f64 * 0.1) / r_s_physical_initial;
+    const ZOOM_SPEED: f64 = 0.05;
 
     let mut beems: Vec<Beem> = Vec::new();
     let num_beams = NUM_BEEMS / 4;
@@ -316,12 +308,19 @@ fn main() {
     }
 
     while !rl.window_should_close() {
+        if rl.is_key_down(KeyboardKey::KEY_Z) {
+            scale_factor *= 1.0 + ZOOM_SPEED;
+        }
+        if rl.is_key_down(KeyboardKey::KEY_X) {
+            scale_factor *= 1.0 - ZOOM_SPEED;
+        }
+
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::new(20, 20, 20, 255));
 
         for beem in &mut beems {
-            beem.update(&mut d, &gargantua);
+            beem.update(&mut d, &gargantua, scale_factor);
             beem.draw(&mut d);
 
             if beem.should_remove() {
@@ -329,17 +328,26 @@ fn main() {
             }
         }
 
-        gargantua.draw(&mut d);
+        gargantua.draw(&mut d, scale_factor);
 
         let mass_text = format!("mass: {:.1e} solar masses", gargantua.mass);
         let light_beems_text = format!("number of light beems: {:}", NUM_BEEMS);
         let radius_km = gargantua.event_horizon_radius_physical() / 1000.0;
         let radius_text = format!("event horizon: {:.1} km", radius_km);
-        let speedup_text = format!("angular step: {}", PHI_STEP_FACTOR);
+        let zoom_text = format!("zoom: {:.2e}", scale_factor);
+        let step_text = format!("angular step (dphi): {:.3}", PHI_STEP_FACTOR);
 
         d.draw_text(&mass_text, 10, 10, 20, Color::WHITE);
         d.draw_text(&radius_text, 10, 35, 20, Color::WHITE);
         d.draw_text(&light_beems_text, 10, 60, 20, Color::WHITE);
-        d.draw_text(&speedup_text, 10, 85, 20, Color::WHITE);
+        d.draw_text(&zoom_text, 10, 85, 20, Color::WHITE);
+        d.draw_text(&step_text, 10, 110, 20, Color::WHITE);
+        d.draw_text(
+            "Using Schwarzschild metric (r'dphi^2 = ...) ",
+            10,
+            135,
+            18,
+            Color::GRAY,
+        );
     }
 }
