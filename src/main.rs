@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 pub const SCREEN_WIDTH: i32 = 800;
 pub const SCREEN_HEIGHT: i32 = 600;
-pub const NUM_BEEMS: i32 = 1000;
+pub const NUM_BEEMS: i32 = 2000;
 
 pub const G: f64 = NEWTONIAN_CONSTANT_OF_GRAVITATION;
 pub const C: f64 = SPEED_OF_LIGHT_IN_VACUUM; //m/s
@@ -60,9 +60,6 @@ impl Beem {
     }
 
     fn initialize_geodesics(&mut self, black_hole: &BlackHole, scale_factor: f64) {
-        // This function sets up initial physical state variables
-        // based on the screen coordinates, using the current scale factor.
-
         if self.initialized {
             return;
         }
@@ -150,10 +147,7 @@ impl Beem {
         }
     }
 
-    // handles state for beem
-    // The `d: &mut RaylibDrawHandle` parameter is not needed here
-    // since we're not drawing within the update function.
-    // It's good practice to separate update logic from drawing logic.
+    // handles state for beem.
     fn update(&mut self, black_hole: &BlackHole, scale_factor: f64) {
         // fades the trail if dead
         if !self.is_alive {
